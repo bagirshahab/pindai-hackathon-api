@@ -28,7 +28,13 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
 
   try {
-    const form = formidable({ maxFileSize: MAX_FILE_SIZE });
+    // Mengizinkan field file kosong agar tidak melempar FormidableError
+    const form = formidable({ 
+      maxFileSize: MAX_FILE_SIZE,
+      allowEmptyFiles: true,
+      minFileSize: 0
+    });
+
     const [fields, files] = await form.parse(req);
 
     const teamName = fields.team_name?.[0]?.trim();
@@ -39,7 +45,7 @@ export default async function handler(req, res) {
     const htmlUrl = fields.html_url?.[0]?.trim() || "";
     const file = files.file_html?.[0];
 
-    // Validasi
+    // Validasi field utama
     if (!teamName || !email || !projectTitle || !description) {
       return res.status(400).json({ error: "Please fill in all required fields." });
     }
@@ -47,20 +53,21 @@ export default async function handler(req, res) {
     let fileName = "";
     let htmlContent = "";
 
-    if (file) {
+    // Cek jika file benar-benar diunggah dan tidak kosong (size > 0)
+    if (file && file.size > 0 && file.filepath) {
       fileName = file.originalFilename || "";
       htmlContent = fs.readFileSync(file.filepath, "utf-8");
     }
 
-    // Simpan Ke NeonDB (Pastikan kolom tabel di NeonDB disesuaikan)
+    // Simpan Ke NeonDB
     await sql`
       INSERT INTO hackathon_submissions
-        (nama, email, instansi, judul_proyek, file_name, html_content)
+        (nama, email, instansi, judul_proyek, description, html_url, file_name, html_content)
       VALUES
-        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${fileName || htmlUrl}, ${htmlContent || description})
+        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${description}, ${htmlUrl}, ${fileName}, ${htmlContent})
     `;
 
-    // Kirim Email Konfirmasi tanpa Branding PindAI
+    // Kirim Email Konfirmasi via Resend
     try {
       await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
