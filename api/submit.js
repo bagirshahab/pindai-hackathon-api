@@ -28,7 +28,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
 
   try {
-    // Mengizinkan field file kosong agar tidak melempar FormidableError
+    // Opsi allowEmptyFiles & minFileSize agar file HTML bersifat opsional
     const form = formidable({ 
       maxFileSize: MAX_FILE_SIZE,
       allowEmptyFiles: true,
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     let fileName = "";
     let htmlContent = "";
 
-    // Cek jika file benar-benar diunggah dan tidak kosong (size > 0)
+    // Cek jika file diunggah
     if (file && file.size > 0 && file.filepath) {
       fileName = file.originalFilename || "";
       htmlContent = fs.readFileSync(file.filepath, "utf-8");
@@ -67,22 +67,22 @@ export default async function handler(req, res) {
         (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${description}, ${htmlUrl}, ${fileName}, ${htmlContent})
     `;
 
-    // Kirim Email Konfirmasi via Resend
+    // Kirim Email Konfirmasi via Resend dengan domain kustom pindai.io
     try {
       await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+        from: process.env.RESEND_FROM_EMAIL || "Thailand AI Hackathon <no-reply@pindai.io>",
         to: email,
         subject: "Submission Received — Thailand AI Hackathon 2026",
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; color: #111; border: 1px solid #1E293B; border-radius: 8px; overflow: hidden;">
             <div style="background-color: #E60000; padding: 20px; text-align: center; color: #FFF;">
-              <h2 style="margin: 0;">THAILAND AI HACKATHON</h2>
+              <h2 style="margin: 0; letter-spacing: 1px;">THAILAND AI HACKATHON</h2>
             </div>
             <div style="padding: 24px; background-color: #0A0E17; color: #F8FAFC;">
               <p>Hello <strong>${teamName}</strong>,</p>
               <p>Thank you for submitting your project, <strong>"${projectTitle}"</strong>, for the Thailand AI Hackathon 2026.</p>
               <p>Our judging panel will review your submission shortly. If further details are needed, we will reach out to this email address.</p>
-              <p style="margin-top: 24px;">Best regards,<br/><strong>Thailand AI Hackathon Committee</strong></p>
+              <p style="margin-top: 24px; border-top: 1px solid #1E293B; padding-top: 16px;">Best regards,<br/><strong>Thailand AI Hackathon Committee</strong></p>
             </div>
           </div>
         `
