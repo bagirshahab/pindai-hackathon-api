@@ -70,19 +70,19 @@ export default async function handler(req, res) {
     // Kirim Email Konfirmasi via Resend
     try {
       await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || "Thailand AI Hackathon <no-reply@pindai.io>",
+        from: process.env.RESEND_FROM_EMAIL || "AI For All Hackathon <no-reply@pindai.io>",
         to: email,
-        subject: "Submission Received — Thailand AI Hackathon 2026",
+        subject: "Submission Received — AI For All Hackathon 2026",
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; color: #111; border: 1px solid #1E293B; border-radius: 8px; overflow: hidden;">
             <div style="background-color: #E60000; padding: 20px; text-align: center; color: #FFF;">
-              <h2 style="margin: 0; letter-spacing: 1px;">THAILAND AI HACKATHON</h2>
+              <h2 style="margin: 0; letter-spacing: 1px;">AI FOR ALL HACKATHON</h2>
             </div>
             <div style="padding: 24px; background-color: #0A0E17; color: #F8FAFC;">
               <p>Hello <strong>${teamName}</strong>,</p>
-              <p>Thank you for submitting your project, <strong>"${projectTitle}"</strong> (${projectTheme}), for the Thailand AI Hackathon 2026.</p>
+              <p>Thank you for submitting your project, <strong>"${projectTitle}"</strong> (${projectTheme}), for the AI For All Hackathon 2026.</p>
               <p>Our judging panel will review your submission shortly. If further details are needed, we will reach out to this email address.</p>
-              <p style="margin-top: 24px; border-top: 1px solid #1E293B; padding-top: 16px;">Best regards,<br/><strong>Thailand AI Hackathon Committee</strong></p>
+              <p style="margin-top: 24px; border-top: 1px solid #1E293B; padding-top: 16px;">Best regards,<br/><strong>AI For All Hackathon Committee</strong></p>
             </div>
           </div>
         `
