@@ -28,7 +28,6 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
 
   try {
-    // Opsi allowEmptyFiles & minFileSize agar file HTML bersifat opsional
     const form = formidable({ 
       maxFileSize: MAX_FILE_SIZE,
       allowEmptyFiles: true,
@@ -41,12 +40,13 @@ export default async function handler(req, res) {
     const email = fields.email?.[0]?.trim();
     const teamMembers = fields.team_members_list?.[0]?.trim();
     const projectTitle = fields.project_title?.[0]?.trim();
+    const projectTheme = fields.project_theme?.[0]?.trim(); // Tangkap project_theme
     const description = fields.project_description?.[0]?.trim();
     const htmlUrl = fields.html_url?.[0]?.trim() || "";
     const file = files.file_html?.[0];
 
-    // Validasi field utama
-    if (!teamName || !email || !projectTitle || !description) {
+    // Validasi field utama termasuk projectTheme
+    if (!teamName || !email || !projectTitle || !projectTheme || !description) {
       return res.status(400).json({ error: "Please fill in all required fields." });
     }
 
@@ -59,15 +59,15 @@ export default async function handler(req, res) {
       htmlContent = fs.readFileSync(file.filepath, "utf-8");
     }
 
-    // Simpan Ke NeonDB
+    // Simpan ke NeonDB (menambahkan kolom project_theme)
     await sql`
       INSERT INTO hackathon_submissions
-        (nama, email, instansi, judul_proyek, description, html_url, file_name, html_content)
+        (nama, email, instansi, judul_proyek, project_theme, description, html_url, file_name, html_content)
       VALUES
-        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${description}, ${htmlUrl}, ${fileName}, ${htmlContent})
+        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${projectTheme}, ${description}, ${htmlUrl}, ${fileName}, ${htmlContent})
     `;
 
-    // Kirim Email Konfirmasi via Resend dengan domain kustom pindai.io
+    // Kirim Email Konfirmasi via Resend
     try {
       await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || "Thailand AI Hackathon <no-reply@pindai.io>",
@@ -80,7 +80,7 @@ export default async function handler(req, res) {
             </div>
             <div style="padding: 24px; background-color: #0A0E17; color: #F8FAFC;">
               <p>Hello <strong>${teamName}</strong>,</p>
-              <p>Thank you for submitting your project, <strong>"${projectTitle}"</strong>, for the Thailand AI Hackathon 2026.</p>
+              <p>Thank you for submitting your project, <strong>"${projectTitle}"</strong> (${projectTheme}), for the Thailand AI Hackathon 2026.</p>
               <p>Our judging panel will review your submission shortly. If further details are needed, we will reach out to this email address.</p>
               <p style="margin-top: 24px; border-top: 1px solid #1E293B; padding-top: 16px;">Best regards,<br/><strong>Thailand AI Hackathon Committee</strong></p>
             </div>
