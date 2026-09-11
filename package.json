@@ -2,11 +2,17 @@
   "name": "pindai-hackathon-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "API untuk form submission Hackathon Thailand — pindai.io",
+  "description": "API & Dynamic Renderer untuk form submission Hackathon Thailand — pindai.io",
   "type": "module",
+  "scripts": {
+    "dev": "vercel dev"
+  },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.5",
     "formidable": "^3.5.1",
     "resend": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vercel/node": "^3.0.0"
   }
 }
