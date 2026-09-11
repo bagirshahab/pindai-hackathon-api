@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/:filename.html",
+      "destination": "/api/render?filename=:filename.html"
+    },
+    {
+      "source": "/:filename",
+      "destination": "/api/render?filename=:filename"
+    }
+  ]
+}
