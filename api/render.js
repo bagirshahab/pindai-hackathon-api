@@ -2,18 +2,6 @@ import { neon } from "@neondatabase/serverless";
 
 const sql = neon(process.env.DATABASE_URL);
 
-// Fungsi untuk mengonversi teks menjadi slug URL
-function slugify(text) {
-  if (!text) return "";
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-")           // Spasi diganti dash (-)
-    .replace(/[^\w\-]+/g, "")       // Hapus simbol khusus
-    .replace(/\-\-+/g, "-");
-}
-
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).send("Method Not Allowed");
@@ -25,45 +13,54 @@ export default async function handler(req, res) {
     return res.status(400).send("Project title or slug is required.");
   }
 
-  // Bersihkan ekstensi .html jika dimasukkan di URL
-  const rawTitle = filename.replace(/\.html$/i, "").toLowerCase();
-  
-  // Ubah tanda hubung (-) dari URL kembali menjadi spasi (contoh: "ketahanan-pangan" -> "ketahanan pangan")
-  const titleWithSpaces = rawTitle.replace(/-/g, " ");
+  // 1. Ambil teks murni dari URL (contoh: "ketahanan-pangan.html" -> "ketahanan pangan")
+  const rawSlug = filename.replace(/\.html$/i, "").toLowerCase();
+  const searchPattern = `%${rawSlug.replace(/-/g, "%")}%`; // Menjadi "%ketahanan%pangan%"
 
   try {
-    // 1. Cari berdasarkan judul dengan spasi atau judul mentah
-    let result = await sql`
+    // 2. Query Neon DB dengan pola ILIKE fleksibel
+    const result = await sql`
       SELECT html_content, judul_proyek 
       FROM hackathon_submissions 
-      WHERE LOWER(judul_proyek) = LOWER(${titleWithSpaces})
-         OR LOWER(judul_proyek) = LOWER(${rawTitle})
+      WHERE LOWER(judul_proyek) ILIKE ${searchPattern}
+         OR LOWER(file_name) ILIKE ${searchPattern}
+         OR LOWER(nama) ILIKE ${searchPattern}
+      ORDER BY id DESC
       LIMIT 1;
     `;
 
-    let submission = result[0];
+    const submission = result[0];
 
-    // 2. Jika belum cocok, lakukan pencarian fleksibel berbasis slugify
+    // Jika record tidak ditemukan sama sekali di database
     if (!submission) {
-      const allSubmissions = await sql`SELECT html_content, judul_proyek FROM hackathon_submissions`;
-      submission = allSubmissions.find(sub => slugify(sub.judul_proyek) === rawTitle);
-    }
-
-    // Jika data tidak ditemukan
-    if (!submission || !submission.html_content) {
       return res.status(404).send(`
         <!DOCTYPE html>
         <html>
         <head><title>404 - Not Found</title></head>
         <body style="font-family:sans-serif; text-align:center; padding-top:50px; background:#0A0E17; color:#FFF;">
           <h1>404 - Proyek Tidak Ditemukan</h1>
-          <p>Proyek dengan judul "${rawTitle}" tidak ditemukan dalam sistem.</p>
+          <p>Proyek "${rawSlug}" tidak ada di database.</p>
         </body>
         </html>
       `);
     }
 
-    // Render halaman HTML
+    // Jika data ditemukan TAPI kolom html_content ternyata kosong / NULL
+    if (!submission.html_content || submission.html_content.trim() === "") {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>HTML Kosong</title></head>
+        <body style="font-family:sans-serif; text-align:center; padding-top:50px; background:#0A0E17; color:#FFF;">
+          <h1 style="color:#FFCC00;">Proyek Ditemukan, Tapi File HTML Kosong!</h1>
+          <p>Judul Proyek: <strong>${submission.judul_proyek}</strong></p>
+          <p>Peserta tidak mengunggah file .html saat submit, atau isi kolom <code>html_content</code> di database masih kosong.</p>
+        </body>
+        </html>
+      `);
+    }
+
+    // 3. Render isi file HTML jika ada
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate");
 
