@@ -2,16 +2,16 @@ import { neon } from "@neondatabase/serverless";
 
 const sql = neon(process.env.DATABASE_URL);
 
-// Fungsi untuk mengonversi judul proyek menjadi format slug URL
+// Fungsi untuk mengonversi teks menjadi slug URL
 function slugify(text) {
   if (!text) return "";
   return text
     .toString()
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, "-")           // Ganti spasi dengan -
-    .replace(/[^\w\-]+/g, "")       // Hapus karakter khusus
-    .replace(/\-\-+/g, "-");        // Ganti multiple - dengan single -
+    .replace(/\s+/g, "-")           // Spasi diganti dash (-)
+    .replace(/[^\w\-]+/g, "")       // Hapus simbol khusus
+    .replace(/\-\-+/g, "-");
 }
 
 export default async function handler(req, res) {
@@ -25,27 +25,31 @@ export default async function handler(req, res) {
     return res.status(400).send("Project title or slug is required.");
   }
 
-  // Bersihkan ekstensi .html jika ada
-  const cleanTitle = filename.replace(/\.html$/i, "").toLowerCase();
+  // Bersihkan ekstensi .html jika dimasukkan di URL
+  const rawTitle = filename.replace(/\.html$/i, "").toLowerCase();
+  
+  // Ubah tanda hubung (-) dari URL kembali menjadi spasi (contoh: "ketahanan-pangan" -> "ketahanan pangan")
+  const titleWithSpaces = rawTitle.replace(/-/g, " ");
 
   try {
-    // 1. Cari yang cocok persis dengan judul_proyek di database
+    // 1. Cari berdasarkan judul dengan spasi atau judul mentah
     let result = await sql`
       SELECT html_content, judul_proyek 
       FROM hackathon_submissions 
-      WHERE LOWER(judul_proyek) = LOWER(${cleanTitle})
+      WHERE LOWER(judul_proyek) = LOWER(${titleWithSpaces})
+         OR LOWER(judul_proyek) = LOWER(${rawTitle})
       LIMIT 1;
     `;
 
     let submission = result[0];
 
-    // 2. Jika tidak cocok persis, cocokkan berdasarkan slug dari judul_proyek
+    // 2. Jika belum cocok, lakukan pencarian fleksibel berbasis slugify
     if (!submission) {
       const allSubmissions = await sql`SELECT html_content, judul_proyek FROM hackathon_submissions`;
-      submission = allSubmissions.find(sub => slugify(sub.judul_proyek) === cleanTitle);
+      submission = allSubmissions.find(sub => slugify(sub.judul_proyek) === rawTitle);
     }
 
-    // Jika data tidak ditemukan atau file HTML kosong
+    // Jika data tidak ditemukan
     if (!submission || !submission.html_content) {
       return res.status(404).send(`
         <!DOCTYPE html>
@@ -53,13 +57,13 @@ export default async function handler(req, res) {
         <head><title>404 - Not Found</title></head>
         <body style="font-family:sans-serif; text-align:center; padding-top:50px; background:#0A0E17; color:#FFF;">
           <h1>404 - Proyek Tidak Ditemukan</h1>
-          <p>Proyek dengan judul "${cleanTitle}" tidak ditemukan dalam sistem.</p>
+          <p>Proyek dengan judul "${rawTitle}" tidak ditemukan dalam sistem.</p>
         </body>
         </html>
       `);
     }
 
-    // Tampilkan isi dokumen HTML
+    // Render halaman HTML
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "s-maxage=86400, stale-while-revalidate");
 
