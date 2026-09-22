@@ -44,10 +44,13 @@ export default async function handler(req, res) {
     const description = fields.project_description?.[0]?.trim();
     const htmlUrl = fields.html_url?.[0]?.trim() || "";
     
+    // Catatan: Jika form Anda ada input institution, ambil di sini. Jika tidak, bisa dikosongkan.
+    const institution = fields.institution?.[0]?.trim() || "-";
+    
     const fileHtml = files.file_html?.[0];
     const fileMd = files.file_md?.[0];
 
-    // Validasi field utama termasuk projectTheme
+    // Validasi field utama
     if (!teamName || !email || !projectTitle || !projectTheme || !description) {
       return res.status(400).json({ error: "Please fill in all required fields." });
     }
@@ -67,12 +70,12 @@ export default async function handler(req, res) {
       mdPath = fileMd.originalFilename || ""; 
     }
 
-    // Simpan ke NeonDB dengan menyesuaikan kolom yang sudah ada
+    // Simpan ke NeonDB dengan seluruh kolom yang valid
     await sql`
       INSERT INTO submissions
-        (full_name, email, team_members, project_title, project_theme, description, html_url, html_content, md_path, created_at)
+        (full_name, email, institution, project_title, html_content, md_path, project_theme, team_members, description, html_url, created_at)
       VALUES
-        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${projectTheme}, ${description}, ${htmlUrl}, ${htmlContent}, ${mdPath}, NOW())
+        (${teamName}, ${email}, ${institution}, ${projectTitle}, ${htmlContent}, ${mdPath}, ${projectTheme}, ${teamMembers}, ${description}, ${htmlUrl}, NOW())
     `;
 
     // Kirim Email Konfirmasi via Resend
