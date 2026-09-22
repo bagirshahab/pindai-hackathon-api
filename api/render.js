@@ -13,18 +13,17 @@ export default async function handler(req, res) {
     return res.status(400).send("Project title or slug is required.");
   }
 
-  // 1. Ambil teks murni dari URL (contoh: "ketahanan-pangan.html" -> "ketahanan pangan")
+  // 1. Ambil teks murni dari URL (contoh: "najma.html" -> "najma")
   const rawSlug = filename.replace(/\.html$/i, "").toLowerCase();
-  const searchPattern = `%${rawSlug.replace(/-/g, "%")}%`; // Menjadi "%ketahanan%pangan%"
+  const searchPattern = `%${rawSlug.replace(/-/g, "%")}%`;
 
   try {
-    // 2. Query Neon DB dengan pola ILIKE fleksibel
+    // 2. Query ke tabel "submissions" dan kolom yang benar (full_name, project_title)
     const result = await sql`
-      SELECT html_content, judul_proyek 
-      FROM hackathon_submissions 
-      WHERE LOWER(judul_proyek) ILIKE ${searchPattern}
-         OR LOWER(file_name) ILIKE ${searchPattern}
-         OR LOWER(nama) ILIKE ${searchPattern}
+      SELECT html_content, project_title 
+      FROM submissions 
+      WHERE LOWER(project_title) ILIKE ${searchPattern}
+         OR LOWER(full_name) ILIKE ${searchPattern}
       ORDER BY id DESC
       LIMIT 1;
     `;
@@ -53,7 +52,7 @@ export default async function handler(req, res) {
         <head><title>HTML Kosong</title></head>
         <body style="font-family:sans-serif; text-align:center; padding-top:50px; background:#0A0E17; color:#FFF;">
           <h1 style="color:#FFCC00;">Proyek Ditemukan, Tapi File HTML Kosong!</h1>
-          <p>Judul Proyek: <strong>${submission.judul_proyek}</strong></p>
+          <p>Judul Proyek: <strong>${submission.project_title}</strong></p>
           <p>Peserta tidak mengunggah file .html saat submit, atau isi kolom <code>html_content</code> di database masih kosong.</p>
         </body>
         </html>
