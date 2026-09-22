@@ -40,31 +40,42 @@ export default async function handler(req, res) {
     const email = fields.email?.[0]?.trim();
     const teamMembers = fields.team_members_list?.[0]?.trim();
     const projectTitle = fields.project_title?.[0]?.trim();
-    const projectTheme = fields.project_theme?.[0]?.trim(); // Tangkap project_theme
+    const projectTheme = fields.project_theme?.[0]?.trim();
     const description = fields.project_description?.[0]?.trim();
     const htmlUrl = fields.html_url?.[0]?.trim() || "";
-    const file = files.file_html?.[0];
+    
+    const fileHtml = files.file_html?.[0];
+    const fileMd = files.file_md?.[0]; // Menangkap file .md dari form frontend
 
     // Validasi field utama termasuk projectTheme
     if (!teamName || !email || !projectTitle || !projectTheme || !description) {
       return res.status(400).json({ error: "Please fill in all required fields." });
     }
 
-    let fileName = "";
+    let htmlFileName = "";
     let htmlContent = "";
+    let mdPath = ""; // Variabel untuk menyimpan path/isi file md
 
-    // Cek jika file diunggah
-    if (file && file.size > 0 && file.filepath) {
-      fileName = file.originalFilename || "";
-      htmlContent = fs.readFileSync(file.filepath, "utf-8");
+    // Cek jika file HTML diunggah
+    if (fileHtml && fileHtml.size > 0 && fileHtml.filepath) {
+      htmlFileName = fileHtml.originalFilename || "";
+      htmlContent = fs.readFileSync(fileHtml.filepath, "utf-8");
     }
 
-    // Simpan ke NeonDB (menambahkan kolom project_theme)
+    // Cek jika file Markdown (.md) diunggah
+    if (fileMd && fileMd.size > 0 && fileMd.filepath) {
+      // Anda bisa menyimpan nama file, path lokal sementara, atau isi teksnya langsung ke kolom md_path
+      mdPath = fileMd.originalFilename || ""; 
+      // Alternatif jika kolom md_path ingin diisi isi teks file .md-nya, gunakan:
+      // mdPath = fs.readFileSync(fileMd.filepath, "utf-8");
+    }
+
+    // Simpan ke NeonDB (menyertakan kolom md_path)
     await sql`
-      INSERT INTO hackathon_submissions
-        (nama, email, instansi, judul_proyek, project_theme, description, html_url, file_name, html_content)
+      INSERT INTO submissions
+        (full_name, email, institution, project_title, html_content, md_path, created_at)
       VALUES
-        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${projectTheme}, ${description}, ${htmlUrl}, ${fileName}, ${htmlContent})
+        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${htmlContent}, ${mdPath}, NOW())
     `;
 
     // Kirim Email Konfirmasi via Resend
