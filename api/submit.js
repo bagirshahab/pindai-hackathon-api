@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     const htmlUrl = fields.html_url?.[0]?.trim() || "";
     
     const fileHtml = files.file_html?.[0];
-    const fileMd = files.file_md?.[0]; // Menangkap file .md dari form frontend
+    const fileMd = files.file_md?.[0];
 
     // Validasi field utama termasuk projectTheme
     if (!teamName || !email || !projectTitle || !projectTheme || !description) {
@@ -54,7 +54,7 @@ export default async function handler(req, res) {
 
     let htmlFileName = "";
     let htmlContent = "";
-    let mdPath = ""; // Variabel untuk menyimpan path/isi file md
+    let mdPath = "";
 
     // Cek jika file HTML diunggah
     if (fileHtml && fileHtml.size > 0 && fileHtml.filepath) {
@@ -64,18 +64,15 @@ export default async function handler(req, res) {
 
     // Cek jika file Markdown (.md) diunggah
     if (fileMd && fileMd.size > 0 && fileMd.filepath) {
-      // Anda bisa menyimpan nama file, path lokal sementara, atau isi teksnya langsung ke kolom md_path
       mdPath = fileMd.originalFilename || ""; 
-      // Alternatif jika kolom md_path ingin diisi isi teks file .md-nya, gunakan:
-      // mdPath = fs.readFileSync(fileMd.filepath, "utf-8");
     }
 
-    // Simpan ke NeonDB (menyertakan kolom md_path)
+    // Simpan ke NeonDB dengan kolom yang lengkap
     await sql`
       INSERT INTO submissions
-        (full_name, email, institution, project_title, html_content, md_path, created_at)
+        (full_name, email, team_members, project_title, project_theme, description, html_url, html_content, md_path, created_at)
       VALUES
-        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${htmlContent}, ${mdPath}, NOW())
+        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${projectTheme}, ${description}, ${htmlUrl}, ${htmlContent}, ${mdPath}, NOW())
     `;
 
     // Kirim Email Konfirmasi via Resend
