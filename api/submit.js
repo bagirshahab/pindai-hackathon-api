@@ -67,7 +67,7 @@ export default async function handler(req, res) {
       mdPath = fileMd.originalFilename || ""; 
     }
 
-    // Simpan ke NeonDB dengan kolom yang lengkap
+    // Simpan ke NeonDB dengan menyesuaikan kolom yang sudah ada
     await sql`
       INSERT INTO submissions
         (full_name, email, team_members, project_title, project_theme, description, html_url, html_content, md_path, created_at)
