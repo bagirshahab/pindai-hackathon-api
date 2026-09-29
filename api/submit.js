@@ -62,6 +62,7 @@ export default async function handler(req, res) {
     let htmlFileName = "";
     let htmlContent = "";
     let mdPath = "";
+    let mdContent = ""; // Variabel untuk menampung isi teks file Markdown
 
     // Cek jika file HTML diunggah
     if (fileHtml && fileHtml.size > 0 && fileHtml.filepath) {
@@ -72,14 +73,15 @@ export default async function handler(req, res) {
     // Cek jika file Markdown (.md) diunggah
     if (fileMd && fileMd.size > 0 && fileMd.filepath) {
       mdPath = fileMd.originalFilename || ""; 
+      mdContent = fs.readFileSync(fileMd.filepath, "utf-8"); // Membaca isi teks file .md
     }
 
-    // Simpan ke NeonDB (tanpa kolom html_url)
+    // Simpan ke NeonDB (menyertakan kolom md_content)
     await sql`
       INSERT INTO submissions
-        (full_name, email, team_members, project_title, project_theme, description, html_content, md_path, created_at)
+        (full_name, email, team_members, project_title, project_theme, description, html_content, md_path, md_content, created_at)
       VALUES
-        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${projectTheme}, ${description}, ${htmlContent}, ${mdPath}, NOW())
+        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${projectTheme}, ${description}, ${htmlContent}, ${mdPath}, ${mdContent}, NOW())
     `;
 
     // Kirim Email Konfirmasi via Resend
