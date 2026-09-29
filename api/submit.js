@@ -65,6 +65,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Please fill in all required fields." });
     }
 
+    // Team members: minimal 1 anggota (leader) wajib ada
+    if (membersArr.length < 1) {
+      return res.status(400).json({ error: "Please enter at least 1 team member (Leader)." });
+    }
+
     // Validasi: email harus sudah terverifikasi via OTP sebelum bisa submit.
     // Ini mencegah bypass frontend (submit langsung ke API tanpa verifikasi).
     const normalizedEmail = email.toLowerCase();
@@ -85,25 +90,27 @@ export default async function handler(req, res) {
     let mdPath = "";
     let mdContent = ""; // Variabel untuk menampung isi teks file Markdown
 
-    // Cek jika file HTML diunggah
-    if (fileHtml && fileHtml.size > 0 && fileHtml.filepath) {
-      htmlFileName = fileHtml.originalFilename || "";
-      // Validasi ekstensi: field HTML hanya menerima .html / .htm
-      if (!hasExtension(htmlFileName, [".html", ".htm"])) {
-        return res.status(400).json({ error: "Invalid HTML file. Only .html or .htm files are accepted." });
-      }
-      htmlContent = fs.readFileSync(fileHtml.filepath, "utf-8");
+    // File HTML wajib diunggah
+    if (!fileHtml || fileHtml.size <= 0 || !fileHtml.filepath) {
+      return res.status(400).json({ error: "Please upload an HTML file." });
     }
+    htmlFileName = fileHtml.originalFilename || "";
+    // Validasi ekstensi: field HTML hanya menerima .html / .htm
+    if (!hasExtension(htmlFileName, [".html", ".htm"])) {
+      return res.status(400).json({ error: "Invalid HTML file. Only .html or .htm files are accepted." });
+    }
+    htmlContent = fs.readFileSync(fileHtml.filepath, "utf-8");
 
-    // Cek jika file Markdown (.md) diunggah
-    if (fileMd && fileMd.size > 0 && fileMd.filepath) {
-      mdPath = fileMd.originalFilename || "";
-      // Validasi ekstensi: field Markdown hanya menerima .md
-      if (!hasExtension(mdPath, [".md"])) {
-        return res.status(400).json({ error: "Invalid Markdown file. Only .md files are accepted." });
-      }
-      mdContent = fs.readFileSync(fileMd.filepath, "utf-8"); // Membaca isi teks file .md
+    // File Markdown (.md) wajib diunggah
+    if (!fileMd || fileMd.size <= 0 || !fileMd.filepath) {
+      return res.status(400).json({ error: "Please upload a Markdown (.md) file." });
     }
+    mdPath = fileMd.originalFilename || "";
+    // Validasi ekstensi: field Markdown hanya menerima .md
+    if (!hasExtension(mdPath, [".md"])) {
+      return res.status(400).json({ error: "Invalid Markdown file. Only .md files are accepted." });
+    }
+    mdContent = fs.readFileSync(fileMd.filepath, "utf-8"); // Membaca isi teks file .md
 
     // Simpan ke NeonDB (menyertakan kolom md_content)
     await sql`
