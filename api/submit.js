@@ -1,322 +1,145 @@
-const API_BASE = "https://pindai-hackathon-api.vercel.app/api";
-const API_URL = `${API_BASE}/submit`;
-const SEND_OTP_URL = `${API_BASE}/send-otp`;
-const VERIFY_OTP_URL = `${API_BASE}/verify-otp`;
+import { neon } from "@neondatabase/serverless";
+import { Resend } from "resend";
+import formidable from "formidable";
+import fs from "fs";
 
-// Pesan bilingual (Thai / English)
-const MSG = {
-    choose_html: "เลือกไฟล์ .html / Choose .html file",
-    choose_md: "เลือกไฟล์ .md / Choose .md file",
-    sending: "กำลังส่ง... / Sending...",
-    btn_submit: "ส่งผลงาน / Submit",
-    err_words: "คำอธิบายเกินขีดจำกัด 100 คำ / Description exceeds the 100-word limit.",
-    err_theme: "กรุณาเลือกธีมหัวข้อโปรเจกต์ / Please select a project theme.",
-    err_connect: "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองอีกครั้ง / Cannot connect to the server. Please try again.",
-    err_email: "กรุณากรอกอีเมลที่ถูกต้อง / Please enter a valid email address.",
-    err_not_verified: "กรุณายืนยันอีเมลก่อนส่งผลงาน / Please verify your email before submitting.",
-    // OTP flow
-    verify_btn: "ยืนยันอีเมล / Verify",
-    verify_sending: "กำลังส่งรหัส... / Sending code...",
-    verify_sent: "ส่งรหัส OTP ไปที่อีเมลของคุณแล้ว / An OTP has been sent to your email.",
-    verify_resend: "ส่งรหัสใหม่ / Resend",
-    otp_checking: "กำลังตรวจสอบ... / Checking...",
-    otp_confirm: "ตรวจสอบรหัส / Confirm",
-    otp_empty: "กรุณากรอกรหัส OTP / Please enter the OTP code.",
-    verified_ok: "✓ อีเมลได้รับการยืนยันแล้ว / Email verified.",
+export const config = {
+  api: {
+    bodyParser: false,
+  },
 };
 
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const sql = neon(process.env.DATABASE_URL);
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-document.addEventListener("DOMContentLoaded", () => {
-    const form = document.getElementById("hackathon-form");
-    const submitBtn = document.getElementById("submit-btn");
-    const submitBtnText = document.getElementById("submit-btn-text");
-    const submitHint = document.getElementById("submit-hint");
-    const messageBox = document.getElementById("form-message");
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-    // File elements
-    const fileInput = document.getElementById("file_html");
-    const fileChosenName = document.getElementById("file-chosen-name");
-    const mdInput = document.getElementById("file_md");
-    const mdChosenName = document.getElementById("md-file-chosen-name");
+function setCorsHeaders(res) {
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
 
-    const descInput = document.getElementById("project_description");
-    const themeSelect = document.getElementById("project_theme");
+function hasExtension(filename, extensions) {
+  if (!filename) return false;
+  const lower = filename.toLowerCase();
+  return extensions.some((ext) => lower.endsWith(ext));
+}
 
-    // Email verification elements
-    const emailInput = document.getElementById("email");
-    const verifyBtn = document.getElementById("verify-email-btn");
-    const emailVerifyStatus = document.getElementById("email-verify-status");
-    const otpBlock = document.getElementById("otp-block");
-    const otpInput = document.getElementById("otp_code");
-    const confirmOtpBtn = document.getElementById("confirm-otp-btn");
-    const otpStatus = document.getElementById("otp-status");
+export default async function handler(req, res) {
+  setCorsHeaders(res);
 
-    // Modal elements
-    const successModal = document.getElementById("success-modal");
-    const successModalClose = document.getElementById("success-modal-close");
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
 
-    // Guard: jika elemen verifikasi OTP tidak ditemukan, berarti HTML belum diperbarui.
-    // Hentikan setup verifikasi agar script tidak crash dan form tetap bisa diisi.
-    if (!verifyBtn || !confirmOtpBtn || !otpBlock || !otpInput) {
-        console.error("Elemen verifikasi OTP tidak ditemukan. Pastikan index.html sudah diperbarui.");
-        if (submitBtn) submitBtn.disabled = false; // jangan kunci form kalau UI verifikasi belum ada
-        return;
-    }
-
-    // State
-    let verifiedEmail = null; // email yang sudah lolos verifikasi OTP
-
-    // ---- File preview ----
-    fileInput.addEventListener("change", () => {
-        if (fileInput.files.length > 0) {
-            fileChosenName.textContent = fileInput.files[0].name;
-            fileChosenName.parentElement.classList.add("has-file");
-        } else {
-            fileChosenName.textContent = MSG.choose_html;
-            fileChosenName.parentElement.classList.remove("has-file");
-        }
+  try {
+    const form = formidable({ 
+      maxFileSize: MAX_FILE_SIZE,
+      allowEmptyFiles: true,
+      minFileSize: 0
     });
 
-    mdInput.addEventListener("change", () => {
-        if (mdInput.files.length > 0) {
-            mdChosenName.textContent = mdInput.files[0].name;
-            mdChosenName.parentElement.classList.add("has-file");
-        } else {
-            mdChosenName.textContent = MSG.choose_md;
-            mdChosenName.parentElement.classList.remove("has-file");
-        }
-    });
+    const [fields, files] = await form.parse(req);
 
-    // ---- Email verification ----
+    const teamName = fields.team_name?.[0]?.trim();
+    const email = fields.email?.[0]?.trim();
+    
+    // Menggabungkan anggota tim (member_1 sampai member_5) secara otomatis
+    let membersArr = [];
+    for (let i = 1; i <= 5; i++) {
+      let m = fields[`member_${i}`]?.[0]?.trim();
+      if (m) membersArr.push(m);
+    }
+    const teamMembers = membersArr.join(", ");
 
-    // Jika user mengubah email setelah verifikasi, reset status verifikasi
-    emailInput.addEventListener("input", () => {
-        const current = emailInput.value.trim().toLowerCase();
-        if (verifiedEmail && current !== verifiedEmail) {
-            resetVerification();
-        }
-    });
+    const projectTitle = fields.project_title?.[0]?.trim();
+    const projectTheme = fields.project_theme?.[0]?.trim();
+    const description = fields.project_description?.[0]?.trim();
+    
+    const fileHtml = files.file_html?.[0];
+    const fileMd = files.file_md?.[0];
 
-    verifyBtn.addEventListener("click", async () => {
-        const email = emailInput.value.trim();
-        if (!email || !emailRegex.test(email)) {
-            setStatus(emailVerifyStatus, MSG.err_email, "error");
-            emailInput.focus();
-            return;
-        }
-
-        setButtonLoading(verifyBtn, true, MSG.verify_sending);
-        setStatus(emailVerifyStatus, "", "");
-
-        try {
-            const res = await fetch(SEND_OTP_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email }),
-            });
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok) {
-                setStatus(emailVerifyStatus, data.error || MSG.err_connect, "error");
-                return;
-            }
-
-            otpBlock.hidden = false;
-            otpInput.focus();
-            setStatus(emailVerifyStatus, MSG.verify_sent, "success");
-            verifyBtn.querySelector("span")?.remove();
-            verifyBtn.textContent = MSG.verify_resend;
-        } catch (err) {
-            console.error(err);
-            setStatus(emailVerifyStatus, MSG.err_connect, "error");
-        } finally {
-            setButtonLoading(verifyBtn, false, verifyBtn.textContent);
-        }
-    });
-
-    confirmOtpBtn.addEventListener("click", async () => {
-        const email = emailInput.value.trim();
-        const code = otpInput.value.trim();
-
-        if (!code) {
-            setStatus(otpStatus, MSG.otp_empty, "error");
-            otpInput.focus();
-            return;
-        }
-
-        setButtonLoading(confirmOtpBtn, true, MSG.otp_checking);
-        setStatus(otpStatus, "", "");
-
-        try {
-            const res = await fetch(VERIFY_OTP_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, otp_code: code }),
-            });
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok) {
-                setStatus(otpStatus, data.error || MSG.err_connect, "error");
-                return;
-            }
-
-            // Verifikasi sukses
-            verifiedEmail = email.toLowerCase();
-            markVerified();
-        } catch (err) {
-            console.error(err);
-            setStatus(otpStatus, MSG.err_connect, "error");
-        } finally {
-            setButtonLoading(confirmOtpBtn, false, MSG.otp_confirm);
-        }
-    });
-
-    function markVerified() {
-        setStatus(emailVerifyStatus, MSG.verified_ok, "success");
-        otpStatus.textContent = "";
-        otpBlock.hidden = true;
-        emailInput.readOnly = true;
-        verifyBtn.disabled = true;
-        verifyBtn.classList.add("verified");
-        // Aktifkan submit
-        submitBtn.disabled = false;
-        submitHint.hidden = true;
+    // Validasi field utama
+    if (!teamName || !email || !projectTitle || !projectTheme || !description) {
+      return res.status(400).json({ error: "Please fill in all required fields." });
     }
 
-    function resetVerification() {
-        verifiedEmail = null;
-        otpBlock.hidden = true;
-        otpInput.value = "";
-        otpStatus.textContent = "";
-        emailInput.readOnly = false;
-        verifyBtn.disabled = false;
-        verifyBtn.classList.remove("verified");
-        verifyBtn.textContent = MSG.verify_btn;
-        setStatus(emailVerifyStatus, "", "");
-        submitBtn.disabled = true;
-        submitHint.hidden = false;
+    // Validasi: email harus sudah terverifikasi via OTP sebelum bisa submit.
+    // Ini mencegah bypass frontend (submit langsung ke API tanpa verifikasi).
+    const normalizedEmail = email.toLowerCase();
+    const verifiedRows = await sql`
+      SELECT verified
+      FROM email_otps
+      WHERE email = ${normalizedEmail}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+
+    if (!verifiedRows[0] || verifiedRows[0].verified !== true) {
+      return res.status(403).json({ error: "Email not verified. Please verify your email before submitting." });
     }
 
-    // ---- Submit ----
-    form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        clearMessage();
+    let htmlFileName = "";
+    let htmlContent = "";
+    let mdPath = "";
+    let mdContent = ""; // Variabel untuk menampung isi teks file Markdown
 
-        if (!verifiedEmail || emailInput.value.trim().toLowerCase() !== verifiedEmail) {
-            showMessage(MSG.err_not_verified, "error");
-            return;
-        }
-
-        if (!themeSelect.value) {
-            showMessage(MSG.err_theme, "error");
-            return;
-        }
-
-        const wordCount = descInput.value.trim().split(/\s+/).filter(Boolean).length;
-        if (wordCount > 100) {
-            showMessage(MSG.err_words, "error");
-            return;
-        }
-
-        const formData = new FormData(form);
-
-        const members = [
-            form.querySelector('[name="member_1"]').value,
-            form.querySelector('[name="member_2"]').value,
-            form.querySelector('[name="member_3"]').value,
-            form.querySelector('[name="member_4"]').value,
-            form.querySelector('[name="member_5"]').value
-        ].filter(Boolean).join(", ");
-
-        formData.append("team_members_list", members);
-
-        setLoading(true);
-
-        try {
-            const res = await fetch(API_URL, {
-                method: "POST",
-                body: formData,
-            });
-
-            const data = await res.json().catch(() => ({}));
-
-            if (!res.ok) {
-                showMessage(data.error || "เกิดข้อผิดพลาดในการส่งข้อมูล / An error occurred.", "error");
-                return;
-            }
-
-            // Sukses: tampilkan modal terima kasih
-            form.reset();
-            fileChosenName.textContent = MSG.choose_html;
-            fileChosenName.parentElement.classList.remove("has-file");
-            mdChosenName.textContent = MSG.choose_md;
-            mdChosenName.parentElement.classList.remove("has-file");
-            resetVerification();
-            openModal();
-        } catch (err) {
-            console.error(err);
-            showMessage(MSG.err_connect, "error");
-        } finally {
-            setLoading(false);
-        }
-    });
-
-    // ---- Modal ----
-    function openModal() {
-        if (!successModal) {
-            // Fallback jika markup modal belum ada di halaman
-            showMessage(MSG.verify_sent ? "ส่งผลงานสำเร็จ! / Submission successful!" : "OK", "success");
-            return;
-        }
-        successModal.hidden = false;
-        // Force reflow agar animasi berjalan
-        void successModal.offsetWidth;
-        successModal.classList.add("visible");
-        document.body.style.overflow = "hidden";
+    // Cek jika file HTML diunggah
+    if (fileHtml && fileHtml.size > 0 && fileHtml.filepath) {
+      htmlFileName = fileHtml.originalFilename || "";
+      // Validasi ekstensi: field HTML hanya menerima .html / .htm
+      if (!hasExtension(htmlFileName, [".html", ".htm"])) {
+        return res.status(400).json({ error: "Invalid HTML file. Only .html or .htm files are accepted." });
+      }
+      htmlContent = fs.readFileSync(fileHtml.filepath, "utf-8");
     }
 
-    function closeModal() {
-        if (!successModal) return;
-        successModal.classList.remove("visible");
-        document.body.style.overflow = "";
-        setTimeout(() => { successModal.hidden = true; }, 300);
+    // Cek jika file Markdown (.md) diunggah
+    if (fileMd && fileMd.size > 0 && fileMd.filepath) {
+      mdPath = fileMd.originalFilename || "";
+      // Validasi ekstensi: field Markdown hanya menerima .md
+      if (!hasExtension(mdPath, [".md"])) {
+        return res.status(400).json({ error: "Invalid Markdown file. Only .md files are accepted." });
+      }
+      mdContent = fs.readFileSync(fileMd.filepath, "utf-8"); // Membaca isi teks file .md
     }
 
-    if (successModalClose) {
-        successModalClose.addEventListener("click", closeModal);
-    }
-    if (successModal) {
-        const backdrop = successModal.querySelector(".success-modal-backdrop");
-        if (backdrop) backdrop.addEventListener("click", closeModal);
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && !successModal.hidden) closeModal();
-        });
+    // Simpan ke NeonDB (menyertakan kolom md_content)
+    await sql`
+      INSERT INTO submissions
+        (full_name, email, team_members, project_title, project_theme, description, html_content, md_path, md_content, created_at)
+      VALUES
+        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${projectTheme}, ${description}, ${htmlContent}, ${mdPath}, ${mdContent}, NOW())
+    `;
+
+    // Kirim Email Konfirmasi via Resend
+    try {
+      await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL || "AI For All Hackathon <no-reply@pindai.io>",
+        to: email,
+        subject: "Submission Received — AI For All Hackathon 2026",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; color: #111; border: 1px solid #1E293B; border-radius: 8px; overflow: hidden;">
+            <div style="background-color: #E60000; padding: 20px; text-align: center; color: #FFF;">
+              <h2 style="margin: 0; letter-spacing: 1px;">AI FOR ALL HACKATHON</h2>
+            </div>
+            <div style="padding: 24px; background-color: #0A0E17; color: #F8FAFC;">
+              <p>Hello <strong>${teamName}</strong>,</p>
+              <p>Thank you for submitting your project, <strong>"${projectTitle}"</strong> (${projectTheme}), for the AI For All Hackathon 2026.</p>
+              <p>Our judging panel will review your submission shortly. If further details are needed, we will reach out to this email address.</p>
+              <p style="margin-top: 24px; border-top: 1px solid #1E293B; padding-top: 16px;">Best regards,<br/><strong>AI For All Hackathon Committee</strong></p>
+            </div>
+          </div>
+        `
+      });
+    } catch (emailErr) {
+      console.error("Gagal mengirim email:", emailErr);
     }
 
-    // ---- Helpers ----
-    function setLoading(isLoading) {
-        submitBtn.disabled = isLoading || !verifiedEmail;
-        submitBtnText.textContent = isLoading ? MSG.sending : MSG.btn_submit;
-    }
-
-    function setButtonLoading(btn, isLoading, text) {
-        btn.disabled = isLoading;
-        if (text) btn.textContent = text;
-    }
-
-    function setStatus(el, text, type) {
-        el.textContent = text;
-        el.className = "verify-status" + (type ? " " + type : "");
-    }
-
-    function showMessage(text, type) {
-        messageBox.textContent = text;
-        messageBox.className = "form-message " + type;
-    }
-
-    function clearMessage() {
-        messageBox.textContent = "";
-        messageBox.className = "form-message";
-    }
-});
+    return res.status(200).json({ success: true, message: "Submission successful." });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error. Please try again." });
+  }
+}
