@@ -38,11 +38,18 @@ export default async function handler(req, res) {
 
     const teamName = fields.team_name?.[0]?.trim();
     const email = fields.email?.[0]?.trim();
-    const teamMembers = fields.team_members_list?.[0]?.trim();
+    
+    // Menggabungkan anggota tim (member_1 sampai member_5) secara otomatis
+    let membersArr = [];
+    for (let i = 1; i <= 5; i++) {
+      let m = fields[`member_${i}`]?.[0]?.trim();
+      if (m) membersArr.push(m);
+    }
+    const teamMembers = membersArr.join(", ");
+
     const projectTitle = fields.project_title?.[0]?.trim();
     const projectTheme = fields.project_theme?.[0]?.trim();
     const description = fields.project_description?.[0]?.trim();
-    const htmlUrl = fields.html_url?.[0]?.trim() || "";
     
     const fileHtml = files.file_html?.[0];
     const fileMd = files.file_md?.[0];
@@ -67,12 +74,12 @@ export default async function handler(req, res) {
       mdPath = fileMd.originalFilename || ""; 
     }
 
-    // Simpan ke NeonDB (tanpa kolom institution)
+    // Simpan ke NeonDB (tanpa kolom html_url)
     await sql`
       INSERT INTO submissions
-        (full_name, email, team_members, project_title, project_theme, description, html_url, html_content, md_path, created_at)
+        (full_name, email, team_members, project_title, project_theme, description, html_content, md_path, created_at)
       VALUES
-        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${projectTheme}, ${description}, ${htmlUrl}, ${htmlContent}, ${mdPath}, NOW())
+        (${teamName}, ${email}, ${teamMembers}, ${projectTitle}, ${projectTheme}, ${description}, ${htmlContent}, ${mdPath}, NOW())
     `;
 
     // Kirim Email Konfirmasi via Resend
