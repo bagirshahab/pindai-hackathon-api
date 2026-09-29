@@ -21,6 +21,12 @@ function setCorsHeaders(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
+function hasExtension(filename, extensions) {
+  if (!filename) return false;
+  const lower = filename.toLowerCase();
+  return extensions.some((ext) => lower.endsWith(ext));
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(res);
 
@@ -59,6 +65,21 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Please fill in all required fields." });
     }
 
+    // Validasi: email harus sudah terverifikasi via OTP sebelum bisa submit.
+    // Ini mencegah bypass frontend (submit langsung ke API tanpa verifikasi).
+    const normalizedEmail = email.toLowerCase();
+    const verifiedRows = await sql`
+      SELECT verified
+      FROM email_otps
+      WHERE email = ${normalizedEmail}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+
+    if (!verifiedRows[0] || verifiedRows[0].verified !== true) {
+      return res.status(403).json({ error: "Email not verified. Please verify your email before submitting." });
+    }
+
     let htmlFileName = "";
     let htmlContent = "";
     let mdPath = "";
@@ -67,12 +88,20 @@ export default async function handler(req, res) {
     // Cek jika file HTML diunggah
     if (fileHtml && fileHtml.size > 0 && fileHtml.filepath) {
       htmlFileName = fileHtml.originalFilename || "";
+      // Validasi ekstensi: field HTML hanya menerima .html / .htm
+      if (!hasExtension(htmlFileName, [".html", ".htm"])) {
+        return res.status(400).json({ error: "Invalid HTML file. Only .html or .htm files are accepted." });
+      }
       htmlContent = fs.readFileSync(fileHtml.filepath, "utf-8");
     }
 
     // Cek jika file Markdown (.md) diunggah
     if (fileMd && fileMd.size > 0 && fileMd.filepath) {
-      mdPath = fileMd.originalFilename || ""; 
+      mdPath = fileMd.originalFilename || "";
+      // Validasi ekstensi: field Markdown hanya menerima .md
+      if (!hasExtension(mdPath, [".md"])) {
+        return res.status(400).json({ error: "Invalid Markdown file. Only .md files are accepted." });
+      }
       mdContent = fs.readFileSync(fileMd.filepath, "utf-8"); // Membaca isi teks file .md
     }
 
