@@ -27,6 +27,29 @@ function hasExtension(filename, extensions) {
   return extensions.some((ext) => lower.endsWith(ext));
 }
 
+// Cek apakah isi file benar-benar terlihat seperti dokumen HTML.
+// Markdown boleh mengandung sedikit tag, jadi kita cari tanda struktur HTML yang kuat.
+function looksLikeHtml(content) {
+  if (!content) return false;
+  const c = content.trim().toLowerCase();
+  return (
+    c.includes("<!doctype html") ||
+    c.includes("<html") ||
+    c.includes("<body") ||
+    c.includes("<head") ||
+    // Beberapa tag HTML umum sebagai indikasi kuat
+    /<(div|p|span|table|script|style|section|header|footer|h1|h2|ul|ol|img|a)\b/.test(c)
+  );
+}
+
+// Cek apakah isi file adalah dokumen HTML utuh (dipakai untuk menolak HTML
+// yang di-rename jadi .md). Markdown normal tidak diawali struktur dokumen HTML.
+function isFullHtmlDocument(content) {
+  if (!content) return false;
+  const c = content.trim().toLowerCase();
+  return c.startsWith("<!doctype html") || c.startsWith("<html");
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(res);
 
@@ -108,6 +131,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid HTML file. Only .html or .htm files are accepted." });
     }
     htmlContent = fs.readFileSync(fileHtml.filepath, "utf-8");
+    // Validasi isi: file HTML harus benar-benar berisi HTML, bukan teks/markdown yang di-rename.
+    if (!looksLikeHtml(htmlContent)) {
+      return res.status(400).json({ error: "The HTML file content does not look like valid HTML. Please upload a real HTML file." });
+    }
 
     // File Markdown (.md) wajib diunggah
     if (!fileMd || fileMd.size <= 0 || !fileMd.filepath) {
@@ -119,6 +146,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid Markdown file. Only .md files are accepted." });
     }
     mdContent = fs.readFileSync(fileMd.filepath, "utf-8"); // Membaca isi teks file .md
+    // Validasi isi: file Markdown tidak boleh berupa dokumen HTML utuh yang di-rename jadi .md.
+    if (isFullHtmlDocument(mdContent)) {
+      return res.status(400).json({ error: "The Markdown file appears to be an HTML document. Please upload a real Markdown (.md) file." });
+    }
 
     // Simpan ke NeonDB (menyertakan kolom md_content)
     await sql`
