@@ -70,6 +70,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Please enter at least 1 team member (Leader)." });
     }
 
+    // Batasi panjang deskripsi (maks 100 kata untuk EN, atau ~600 karakter untuk Thai).
+    // Sejalan dengan validasi frontend agar tidak bisa di-bypass lewat API.
+    const descWordCount = description.split(/\s+/).filter(Boolean).length;
+    const descCharCount = description.replace(/\s/g, "").length;
+    if (descWordCount > 100 || descCharCount > 600) {
+      return res.status(400).json({ error: "Description exceeds the 100-word limit." });
+    }
+
     // Validasi: email harus sudah terverifikasi via OTP sebelum bisa submit.
     // Ini mencegah bypass frontend (submit langsung ke API tanpa verifikasi).
     const normalizedEmail = email.toLowerCase();
