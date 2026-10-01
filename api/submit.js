@@ -164,7 +164,7 @@ export default async function handler(req, res) {
       await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || "AI For All Hackathon <no-reply@pindai.io>",
         to: email,
-        subject: "Your Submission Has Been Received — What Happens Next / เราได้รับผลงานของคุณแล้ว — ขั้นตอนต่อไป",
+        subject: "เราได้รับผลงานของคุณแล้ว — ขั้นตอนต่อไป / Your Submission Has Been Received — What Happens Next",
         html: `
           <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; color: #0A0E17; border: 1px solid #E2E8F0; border-radius: 10px; overflow: hidden;">
             <div style="background-color: #E60000; padding: 22px; text-align: center; color: #FFFFFF;">
@@ -173,6 +173,33 @@ export default async function handler(req, res) {
             </div>
 
             <div style="padding: 28px 26px; background-color: #FFFFFF; color: #1E293B; line-height: 1.6;">
+
+              <!-- ===== THAI ===== -->
+              <p style="margin: 0 0 14px;">เรียน <strong>${teamName}</strong></p>
+              <p style="margin: 0 0 18px;">ขอบคุณที่ส่งผลงานแนวคิด <strong>"${projectTitle}"</strong> (${projectTheme}) เข้าร่วมโครงการ AI FOR ALL Hackathon 2026 เราได้รับผลงานของทีมคุณเรียบร้อยแล้ว</p>
+
+              <p style="margin: 0 0 10px; font-weight: 700; color: #0A0E17;">ขั้นตอนถัดไปมีดังนี้:</p>
+
+              <p style="margin: 0 0 4px;"><strong>1. ประกาศรายชื่อ Top 20 — วันที่ 10 พฤศจิกายน 2569</strong></p>
+              <p style="margin: 0 0 14px; color: #475569;">รายชื่อ 20 ทีมที่ผ่านการคัดเลือกจะประกาศทางเว็บไซต์ True</p>
+
+              <p style="margin: 0 0 4px;"><strong>2. ค่ายอบรมเชิงปฏิบัติการ (Bootcamp) ที่กรุงเทพฯ — วันที่ 21–22 พฤศจิกายน 2569</strong></p>
+              <p style="margin: 0 0 14px; color: #475569;">ทีม Top 20 ทุกทีมจะต้องเดินทางมากรุงเทพฯ เพื่อเข้าร่วม Bootcamp แบบ onsite เป็นเวลา 2 วันเต็ม โดยโครงการจะรับผิดชอบค่าเดินทางและที่พักให้กับสมาชิกทีมสูงสุด 5 คน (ขึ้นอยู่กับการยืนยันขั้นสุดท้าย)</p>
+
+              <p style="margin: 0 0 4px;"><strong>3. การพัฒนาต้นแบบ</strong></p>
+              <p style="margin: 0 0 14px; color: #475569;">ระหว่าง Bootcamp แต่ละทีมจะพัฒนาแนวคิดต่อยอดเป็นต้นแบบ (Prototype) โดยใช้ Amazon Kiro พร้อมคำแนะนำจากผู้เชี่ยวชาญ</p>
+
+              <p style="margin: 0 0 4px;"><strong>4. Demo Day — คัดเลือก Top 5</strong></p>
+              <p style="margin: 0 0 14px; color: #475569;">เมื่อสิ้นสุด Bootcamp แต่ละทีมจะนำเสนอต้นแบบต่อคณะกรรมการ เพื่อคัดเลือกทีมสุดท้าย 5 ทีม</p>
+
+              <p style="margin: 0 0 4px;"><strong>5. รอบชิงชนะเลิศ — วันที่ 12 ธันวาคม 2569</strong></p>
+              <p style="margin: 0 0 18px; color: #475569;">5 ทีมสุดท้ายจะนำเสนอผลงานรอบชิงชนะเลิศและร่วมพิธีมอบรางวัล ที่กรุงเทพฯ</p>
+
+              <p style="margin: 0 0 6px;">เราจะแจ้งรายละเอียดเพิ่มเติมของแต่ละขั้นตอนให้ทราบล่วงหน้า ขอบคุณที่เป็นส่วนหนึ่งของ AI FOR ALL และขอให้โชคดี!</p>
+              <p style="margin: 0 0 2px;">ขอแสดงความนับถือ</p>
+              <p style="margin: 0;"><strong>ทีมงาน AI FOR ALL Hackathon</strong><br/>Thaksa AI project under TURAC</p>
+
+              <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 26px 0;" />
 
               <!-- ===== ENGLISH ===== -->
               <p style="margin: 0 0 14px;">Dear <strong>${teamName}</strong>,</p>
@@ -198,33 +225,6 @@ export default async function handler(req, res) {
               <p style="margin: 0 0 6px;">We'll be in touch with further details as each stage approaches. Thank you for being part of AI FOR ALL — good luck!</p>
               <p style="margin: 0 0 2px;">Best regards,</p>
               <p style="margin: 0;"><strong>AI FOR ALL Hackathon Team</strong><br/>Thaksa AI project under TURAC</p>
-
-              <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 26px 0;" />
-
-              <!-- ===== THAI ===== -->
-              <p style="margin: 0 0 14px;">เรียน <strong>${teamName}</strong></p>
-              <p style="margin: 0 0 18px;">ขอบคุณที่ส่งผลงานแนวคิดเข้าร่วมโครงการ <strong>"${projectTitle}"</strong> (${projectTheme}) AI FOR ALL Hackathon 2026 เราได้รับผลงานของทีมคุณเรียบร้อยแล้ว</p>
-
-              <p style="margin: 0 0 10px; font-weight: 700; color: #0A0E17;">ขั้นตอนถัดไปมีดังนี้:</p>
-
-              <p style="margin: 0 0 4px;"><strong>1. ประกาศรายชื่อ Top 20 — วันที่ 10 พฤศจิกายน 2569</strong></p>
-              <p style="margin: 0 0 14px; color: #475569;">รายชื่อ 20 ทีมที่ผ่านการคัดเลือกจะประกาศทางเว็บไซต์ True</p>
-
-              <p style="margin: 0 0 4px;"><strong>2. ค่ายอบรมเชิงปฏิบัติการ (Bootcamp) ที่กรุงเทพฯ — วันที่ 21–22 พฤศจิกายน 2569</strong></p>
-              <p style="margin: 0 0 14px; color: #475569;">ทีม Top 20 ทุกทีมจะต้องเดินทางมากรุงเทพฯ เพื่อเข้าร่วม Bootcamp แบบ onsite เป็นเวลา 2 วันเต็ม โดยโครงการจะรับผิดชอบค่าเดินทางและที่พักให้กับสมาชิกทีมสูงสุด 5 คน (ขึ้นอยู่กับการยืนยันขั้นสุดท้าย)</p>
-
-              <p style="margin: 0 0 4px;"><strong>3. การพัฒนาต้นแบบ</strong></p>
-              <p style="margin: 0 0 14px; color: #475569;">ระหว่าง Bootcamp แต่ละทีมจะพัฒนาแนวคิดต่อยอดเป็นต้นแบบ (Prototype) โดยใช้ Amazon Kiro พร้อมคำแนะนำจากผู้เชี่ยวชาญ</p>
-
-              <p style="margin: 0 0 4px;"><strong>4. Demo Day — คัดเลือก Top 5</strong></p>
-              <p style="margin: 0 0 14px; color: #475569;">เมื่อสิ้นสุด Bootcamp แต่ละทีมจะนำเสนอต้นแบบต่อคณะกรรมการ เพื่อคัดเลือกทีมสุดท้าย 5 ทีม</p>
-
-              <p style="margin: 0 0 4px;"><strong>5. รอบชิงชนะเลิศ — วันที่ 12 ธันวาคม 2569</strong></p>
-              <p style="margin: 0 0 18px; color: #475569;">5 ทีมสุดท้ายจะนำเสนอผลงานรอบชิงชนะเลิศและร่วมพิธีมอบรางวัล ที่กรุงเทพฯ</p>
-
-              <p style="margin: 0 0 6px;">เราจะแจ้งรายละเอียดเพิ่มเติมของแต่ละขั้นตอนให้ทราบล่วงหน้า ขอบคุณที่เป็นส่วนหนึ่งของ AI FOR ALL และขอให้โชคดี!</p>
-              <p style="margin: 0 0 2px;">ขอแสดงความนับถือ</p>
-              <p style="margin: 0;"><strong>ทีมงาน AI FOR ALL Hackathon</strong><br/>Thaksa AI project under TURAC</p>
             </div>
           </div>
         `
