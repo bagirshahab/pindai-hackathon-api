@@ -14,6 +14,10 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
+// Deadline penutupan submission: 4 November 2026, 23:59:59 waktu Thailand (UTC+7).
+// Setelah waktu ini, server menolak submission baru (anti-bypass, tidak bisa dilewati dari frontend).
+const SUBMISSION_DEADLINE = new Date("2026-11-04T23:59:59+07:00");
+
 function setCorsHeaders(res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
   res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
@@ -55,6 +59,11 @@ export default async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
+
+  // Tolak submission setelah deadline (4 Nov 2026 23:59:59 ICT).
+  if (Date.now() > SUBMISSION_DEADLINE.getTime()) {
+    return res.status(403).json({ error: "Submissions are now closed. The deadline (4 November 2026) has passed." });
+  }
 
   try {
     const form = formidable({ 
