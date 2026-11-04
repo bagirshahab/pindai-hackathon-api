@@ -48,7 +48,8 @@ export default async function handler(req, res) {
         project_title,
         project_theme,
         team_members,
-        description
+        description,
+        created_at
       FROM submissions
       ORDER BY id ASC
       LIMIT ${MAX_ROWS}
