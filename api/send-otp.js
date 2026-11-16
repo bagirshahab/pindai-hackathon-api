@@ -1,5 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { Resend } from "resend";
+import crypto from "crypto";
 
 const sql = neon(process.env.DATABASE_URL);
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -19,8 +20,8 @@ function isValidEmail(email) {
 }
 
 function generateOtp() {
-  // 6 digit, selalu 6 karakter (tidak diawali 0 yang hilang)
-  return String(Math.floor(100000 + Math.random() * 900000));
+  // 6 digit, selalu 6 karakter. Memakai generator acak kriptografis (bukan Math.random).
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 export default async function handler(req, res) {
@@ -29,14 +30,18 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
 
+  // Parsing body: input yang salah format dijawab 400, bukan 500.
+  let body = req.body;
+  if (typeof body === "string") {
+    try { body = JSON.parse(body.replace(/^\uFEFF/, "") || "{}"); }
+    catch (e) { return res.status(400).json({ error: "Invalid request." }); }
+  }
+  if (!body || typeof body !== "object") body = {};
+
   try {
-    let body = req.body;
-    if (typeof body === "string") body = JSON.parse(body || "{}");
-    if (!body) body = {};
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
 
-    const email = (body.email || "").trim().toLowerCase();
-
-    if (!email || !isValidEmail(email)) {
+    if (!email || email.length > 254 || !isValidEmail(email)) {
       return res.status(400).json({ error: "Please enter a valid email address." });
     }
 
