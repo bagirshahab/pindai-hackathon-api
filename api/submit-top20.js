@@ -82,7 +82,10 @@ export default async function handler(req, res) {
 
   try {
     let body = req.body;
-    if (typeof body === "string") body = JSON.parse(body || "{}");
+    if (typeof body === "string") {
+      try { body = JSON.parse(body.replace(/^\uFEFF/, "") || "{}"); }
+      catch (e) { return res.status(400).json({ error: "Invalid request." }); }
+    }
     if (!body || typeof body !== "object") body = {};
 
     const teamName = String(body.team_name || "").trim();
