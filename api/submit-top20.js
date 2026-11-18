@@ -66,9 +66,96 @@ function validateRepoUrl(raw) {
   if (host === "github.com" && GITHUB_RESERVED.includes(segs[0].toLowerCase())) return { ok: false, reason: "repo_incomplete" };
   return { ok: true, value: "https://" + host + "/" + segs.join("/") };
 }
+
+// Link video: URL http(s) dengan domain publik. Platform apa pun diterima (YouTube, Drive, Loom, dll).
+function validateVideoUrl(raw) {
+  const u = parseHttpUrl(raw);
+  if (!u) return { ok: false, reason: "invalid" };
+  if (!isPublicHostname(u.hostname.toLowerCase())) return { ok: false, reason: "invalid" };
+  return { ok: true, value: u.href };
+}
 // </links-validation>
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// <payload-validation>
+const MIN_TEAM_NUMBER = 1;
+const MAX_TEAM_NUMBER = 99;
+
+function textOf(v) {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+// Nomor tim: bilangan bulat 1-99 (angka atau string angka).
+function parseTeamNumber(v) {
+  let n = null;
+  if (typeof v === "number") n = v;
+  else if (typeof v === "string" && /^\d{1,2}$/.test(v.trim())) n = Number(v.trim());
+  return Number.isInteger(n) && n >= MIN_TEAM_NUMBER && n <= MAX_TEAM_NUMBER ? n : null;
+}
+
+// Memeriksa seluruh isian form. Mengembalikan { ok:true, data } atau { ok:false, error }.
+function validatePayload(body) {
+  const fail = (error) => ({ ok: false, error });
+
+  const teamName = textOf(body.team_name);
+  const projectTitle = textOf(body.project_title);
+  const email = textOf(body.email).toLowerCase();
+
+  if (!teamName || !projectTitle || !email) return fail("Please fill in all required fields.");
+  if (teamName.length > 150 || projectTitle.length > 200 || email.length > 200) return fail("One of the fields is too long.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Please enter a valid email address.");
+
+  const teamNumber = parseTeamNumber(body.team_number);
+  if (teamNumber === null) return fail("Please enter a valid team number (" + MIN_TEAM_NUMBER + "-" + MAX_TEAM_NUMBER + ").");
+
+  const members = (Array.isArray(body.members) ? body.members : []).map(textOf).filter(Boolean);
+  if (members.length < 1) return fail("Please enter at least 1 team member (Leader).");
+  if (members.length > 5 || members.some((m) => m.length > 100)) return fail("Team members: maximum 5 names, 100 characters each.");
+
+  // Website: WAJIB
+  const website = validateWebsiteUrl(body.website_url);
+  if (!website.ok) {
+    return fail(website.reason === "is_repo"
+      ? "The website field needs a live website link, not a repository link."
+      : "Invalid website link. It must be a full link starting with https:// (e.g. https://myproject.vercel.app).");
+  }
+
+  // Repository: OPSIONAL, tapi kalau diisi harus link repo yang benar
+  let repoUrl = null;
+  if (textOf(body.repo_url)) {
+    const repo = validateRepoUrl(body.repo_url);
+    if (!repo.ok) {
+      return fail(repo.reason === "not_repo"
+        ? "Invalid repository link. Only GitHub, GitLab, Bitbucket and Codeberg links are accepted."
+        : repo.reason === "repo_incomplete"
+          ? "The repository link must point to a repository, e.g. https://github.com/username/repository."
+          : "Invalid repository link. It must be a full link starting with https://.");
+    }
+    repoUrl = repo.value;
+  }
+
+  // Video: OPSIONAL, tapi kalau diisi harus link yang valid
+  let videoUrl = null;
+  if (textOf(body.video_url)) {
+    const video = validateVideoUrl(body.video_url);
+    if (!video.ok) return fail("Invalid video link. It must be a full link starting with https://.");
+    videoUrl = video.value;
+  }
+
+  // Bedrock & AgentCore: WAJIB dijawab (true/false)
+  if (typeof body.bedrock_used !== "boolean") return fail("Please answer whether Amazon Bedrock was used.");
+  if (typeof body.agentcore_used !== "boolean") return fail("Please answer whether AgentCore was used.");
+
+  return {
+    ok: true,
+    data: {
+      teamNumber, teamName, projectTitle, email, members,
+      teamMembers: members.join(", "),
+      websiteUrl: website.value, repoUrl, videoUrl,
+      bedrockUsed: body.bedrock_used, agentcoreUsed: body.agentcore_used,
+    },
+  };
+}
+// </payload-validation>
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -88,55 +175,16 @@ export default async function handler(req, res) {
     }
     if (!body || typeof body !== "object") body = {};
 
-    const teamName = String(body.team_name || "").trim();
-    const projectTitle = String(body.project_title || "").trim();
-    const email = String(body.email || "").trim().toLowerCase();
-
-    // Anggota tim: minimal 1 (leader), maksimal 5
-    const membersArr = (Array.isArray(body.members) ? body.members : [])
-      .map((m) => String(m || "").trim())
-      .filter(Boolean);
-
-    if (!teamName || !projectTitle || !email) {
-      return res.status(400).json({ error: "Please fill in all required fields." });
-    }
-    if (teamName.length > 150 || projectTitle.length > 200 || email.length > 200) {
-      return res.status(400).json({ error: "One of the fields is too long." });
-    }
-    if (!EMAIL_RE.test(email)) {
-      return res.status(400).json({ error: "Please enter a valid email address." });
-    }
-    if (membersArr.length < 1) {
-      return res.status(400).json({ error: "Please enter at least 1 team member (Leader)." });
-    }
-    if (membersArr.length > 5 || membersArr.some((m) => m.length > 100)) {
-      return res.status(400).json({ error: "Team members: maximum 5 names, 100 characters each." });
-    }
-
-    // Validasi link (di server, tidak bisa di-bypass dari frontend)
-    const website = validateWebsiteUrl(body.website_url);
-    if (!website.ok) {
-      const msg = website.reason === "is_repo"
-        ? "The website field needs a live website link, not a repository link."
-        : "Invalid website link. It must be a full link starting with https:// (e.g. https://myproject.vercel.app).";
-      return res.status(400).json({ error: msg });
-    }
-
-    const repo = validateRepoUrl(body.repo_url);
-    if (!repo.ok) {
-      const msg = repo.reason === "not_repo"
-        ? "Invalid repository link. Only GitHub, GitLab, Bitbucket and Codeberg links are accepted."
-        : repo.reason === "repo_incomplete"
-          ? "The repository link must point to a repository, e.g. https://github.com/username/repository."
-          : "Invalid repository link. It must be a full link starting with https://.";
-      return res.status(400).json({ error: msg });
-    }
+    // Validasi di server (tidak bisa di-bypass dari frontend)
+    const v = validatePayload(body);
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    const d = v.data;
 
     // Email wajib sudah terverifikasi OTP (memakai tabel email_otps yang sama dengan form utama).
     const otpRows = await sql`
       SELECT verified, created_at
       FROM email_otps
-      WHERE email = ${email}
+      WHERE email = ${d.email}
       ORDER BY created_at DESC
       LIMIT 1
     `;
@@ -146,25 +194,28 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Email not verified. Please verify your email before submitting." });
     }
 
-    const teamMembers = membersArr.join(", ");
-
+    // Resubmission diperbolehkan: setiap pengiriman disimpan sebagai baris baru (riwayat lengkap),
+    // dan view submissions_top20_current menampilkan yang TERAKHIR per nomor tim.
     await sql`
       INSERT INTO submissions_top20
-        (team_name, email, project_title, team_members, website_url, repo_url, created_at)
+        (team_number, team_name, email, project_title, team_members, website_url, repo_url, video_url, bedrock_used, agentcore_used, created_at)
       VALUES
-        (${teamName}, ${email}, ${projectTitle}, ${teamMembers}, ${website.value}, ${repo.value}, NOW())
+        (${d.teamNumber}, ${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.videoUrl}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
     `;
 
     // Email konfirmasi (gagal kirim tidak membatalkan submission)
     try {
-      const t = escapeHtml(teamName);
-      const p = escapeHtml(projectTitle);
-      const m = escapeHtml(teamMembers);
-      const w = escapeHtml(website.value);
-      const r = escapeHtml(repo.value);
+      const t = escapeHtml(d.teamName);
+      const p = escapeHtml(d.projectTitle);
+      const m = escapeHtml(d.teamMembers);
+      const w = escapeHtml(d.websiteUrl);
+      const yesNo = (b) => (b ? "Yes / ใช่" : "No / ไม่ใช่");
+      const row = (label, value) => `<tr><td style="padding: 6px 0; color: #64748B; width: 170px; vertical-align: top;">${label}</td><td style="padding: 6px 0;">${value}</td></tr>`;
+      const link = (u) => { const e = escapeHtml(u); return `<a href="${e}">${e}</a>`; };
+
       await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || "AI For All Hackathon <no-reply@pindai.io>",
-        to: email,
+        to: d.email,
         subject: "เราได้รับผลงาน Top 20 ของคุณแล้ว / Your Top 20 Submission Has Been Received",
         html: `
           <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; color: #0A0E17; border: 1px solid #E2E8F0; border-radius: 10px; overflow: hidden;">
@@ -177,11 +228,19 @@ export default async function handler(req, res) {
               <p style="margin: 0 0 12px;">Dear <strong>${t}</strong>,</p>
               <p style="margin: 0 0 18px;">We have received your team's Top 20 submission.</p>
               <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                <tr><td style="padding: 6px 0; color: #64748B; width: 150px;">Project / โปรเจกต์</td><td style="padding: 6px 0;"><strong>${p}</strong></td></tr>
-                <tr><td style="padding: 6px 0; color: #64748B;">Members / สมาชิก</td><td style="padding: 6px 0;">${m}</td></tr>
-                <tr><td style="padding: 6px 0; color: #64748B;">Website / เว็บไซต์</td><td style="padding: 6px 0;"><a href="${w}">${w}</a></td></tr>
-                <tr><td style="padding: 6px 0; color: #64748B;">Repository</td><td style="padding: 6px 0;"><a href="${r}">${r}</a></td></tr>
+                ${row("Team No. / ทีมหมายเลข", `<strong>${d.teamNumber}</strong>`)}
+                ${row("Project / โปรเจกต์", `<strong>${p}</strong>`)}
+                ${row("Members / สมาชิก", m)}
+                ${row("Website / เว็บไซต์", link(d.websiteUrl))}
+                ${d.repoUrl ? row("Repository", link(d.repoUrl)) : ""}
+                ${d.videoUrl ? row("Video / วิดีโอ", link(d.videoUrl)) : ""}
+                ${row("Amazon Bedrock", yesNo(d.bedrockUsed))}
+                ${row("AgentCore", yesNo(d.agentcoreUsed))}
               </table>
+              <p style="margin: 20px 0 4px; padding: 12px 14px; background: #F1F5F9; border-radius: 8px; font-size: 13px;">
+                ส่งใหม่ได้ ระบบจะใช้ฉบับล่าสุดเท่านั้น<br>
+                You can resubmit at any time. Only the latest submission is used.
+              </p>
               <p style="margin: 22px 0 2px;">ขอแสดงความนับถือ / Best regards,</p>
               <p style="margin: 0;"><strong>ทีมงาน AI FOR ALL Hackathon / AI FOR ALL Hackathon Team</strong></p>
             </div>
