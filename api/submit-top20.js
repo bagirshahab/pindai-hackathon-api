@@ -77,19 +77,8 @@ function validateVideoUrl(raw) {
 // </links-validation>
 
 // <payload-validation>
-const MIN_TEAM_NUMBER = 1;
-const MAX_TEAM_NUMBER = 99;
-
 function textOf(v) {
   return typeof v === "string" ? v.trim() : "";
-}
-
-// Nomor tim: bilangan bulat 1-99 (angka atau string angka).
-function parseTeamNumber(v) {
-  let n = null;
-  if (typeof v === "number") n = v;
-  else if (typeof v === "string" && /^\d{1,2}$/.test(v.trim())) n = Number(v.trim());
-  return Number.isInteger(n) && n >= MIN_TEAM_NUMBER && n <= MAX_TEAM_NUMBER ? n : null;
 }
 
 // Memeriksa seluruh isian form. Mengembalikan { ok:true, data } atau { ok:false, error }.
@@ -103,9 +92,6 @@ function validatePayload(body) {
   if (!teamName || !projectTitle || !email) return fail("Please fill in all required fields.");
   if (teamName.length > 150 || projectTitle.length > 200 || email.length > 200) return fail("One of the fields is too long.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Please enter a valid email address.");
-
-  const teamNumber = parseTeamNumber(body.team_number);
-  if (teamNumber === null) return fail("Please enter a valid team number (" + MIN_TEAM_NUMBER + "-" + MAX_TEAM_NUMBER + ").");
 
   const members = (Array.isArray(body.members) ? body.members : []).map(textOf).filter(Boolean);
   if (members.length < 1) return fail("Please enter at least 1 team member (Leader).");
@@ -148,7 +134,7 @@ function validatePayload(body) {
   return {
     ok: true,
     data: {
-      teamNumber, teamName, projectTitle, email, members,
+      teamName, projectTitle, email, members,
       teamMembers: members.join(", "),
       websiteUrl: website.value, repoUrl, videoUrl,
       bedrockUsed: body.bedrock_used, agentcoreUsed: body.agentcore_used,
@@ -195,12 +181,12 @@ export default async function handler(req, res) {
     }
 
     // Resubmission diperbolehkan: setiap pengiriman disimpan sebagai baris baru (riwayat lengkap),
-    // dan view submissions_top20_current menampilkan yang TERAKHIR per nomor tim.
+    // dan view submissions_top20_current menampilkan yang TERAKHIR per email (email sudah diverifikasi OTP).
     await sql`
       INSERT INTO submissions_top20
-        (team_number, team_name, email, project_title, team_members, website_url, repo_url, video_url, bedrock_used, agentcore_used, created_at)
+        (team_name, email, project_title, team_members, website_url, repo_url, video_url, bedrock_used, agentcore_used, created_at)
       VALUES
-        (${d.teamNumber}, ${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.videoUrl}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
+        (${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.videoUrl}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
     `;
 
     // Email konfirmasi (gagal kirim tidak membatalkan submission)
@@ -228,7 +214,6 @@ export default async function handler(req, res) {
               <p style="margin: 0 0 12px;">Dear <strong>${t}</strong>,</p>
               <p style="margin: 0 0 18px;">We have received your team's Top 20 submission.</p>
               <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                ${row("Team No. / ทีมหมายเลข", `<strong>${d.teamNumber}</strong>`)}
                 ${row("Project / โปรเจกต์", `<strong>${p}</strong>`)}
                 ${row("Members / สมาชิก", m)}
                 ${row("Website / เว็บไซต์", link(d.websiteUrl))}
@@ -238,8 +223,8 @@ export default async function handler(req, res) {
                 ${row("AgentCore", yesNo(d.agentcoreUsed))}
               </table>
               <p style="margin: 20px 0 4px; padding: 12px 14px; background: #F1F5F9; border-radius: 8px; font-size: 13px;">
-                ส่งใหม่ได้ ระบบจะใช้ฉบับล่าสุดเท่านั้น<br>
-                You can resubmit at any time. Only the latest submission is used.
+                ส่งใหม่ได้ด้วยอีเมลเดิม ระบบจะใช้ฉบับล่าสุดเท่านั้น<br>
+                You can resubmit with the same email. Only the latest submission is used.
               </p>
               <p style="margin: 22px 0 2px;">ขอแสดงความนับถือ / Best regards,</p>
               <p style="margin: 0;"><strong>ทีมงาน AI FOR ALL Hackathon / AI FOR ALL Hackathon Team</strong></p>
