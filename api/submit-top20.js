@@ -68,12 +68,6 @@ function validateRepoUrl(raw) {
     return { ok: true, value: u.origin + "/codesuite/codecommit/repositories/" + segs[3] + u.search };
   }
   return { ok: false, reason: "not_repo" };
-}// Link video: URL http(s) dengan domain publik. Platform apa pun diterima (YouTube, Drive, Loom, dll).
-function validateVideoUrl(raw) {
-  const u = parseHttpUrl(raw);
-  if (!u) return { ok: false, reason: "invalid" };
-  if (!isPublicHostname(u.hostname.toLowerCase())) return { ok: false, reason: "invalid" };
-  return { ok: true, value: u.href };
 }
 // </links-validation>
 
@@ -121,13 +115,6 @@ function validatePayload(body) {
     repoUrl = repo.value;
   }
 
-  // Video: OPSIONAL, tapi kalau diisi harus link yang valid
-  let videoUrl = null;
-  if (textOf(body.video_url)) {
-    const video = validateVideoUrl(body.video_url);
-    if (!video.ok) return fail("Invalid video link. It must be a full link starting with https://.");
-    videoUrl = video.value;
-  }
 
   // Bedrock & AgentCore: WAJIB dijawab (true/false)
   if (typeof body.bedrock_used !== "boolean") return fail("Please answer whether Amazon Bedrock was used.");
@@ -138,7 +125,7 @@ function validatePayload(body) {
     data: {
       teamName, projectTitle, email, members,
       teamMembers: members.join(", "),
-      websiteUrl: website.value, repoUrl, videoUrl,
+      websiteUrl: website.value, repoUrl,
       bedrockUsed: body.bedrock_used, agentcoreUsed: body.agentcore_used,
     },
   };
@@ -186,9 +173,9 @@ export default async function handler(req, res) {
     // dan view submissions_top20_current menampilkan yang TERAKHIR per email (email sudah diverifikasi OTP).
     await sql`
       INSERT INTO submissions_top20
-        (team_name, email, project_title, team_members, website_url, repo_url, video_url, bedrock_used, agentcore_used, created_at)
+        (team_name, email, project_title, team_members, website_url, repo_url, bedrock_used, agentcore_used, created_at)
       VALUES
-        (${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.videoUrl}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
+        (${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
     `;
 
     // Email konfirmasi (gagal kirim tidak membatalkan submission)
@@ -220,7 +207,6 @@ export default async function handler(req, res) {
                 ${row("Members / สมาชิก", m)}
                 ${row("Website / เว็บไซต์", link(d.websiteUrl))}
                 ${row("Repository", link(d.repoUrl))}
-                ${d.videoUrl ? row("Video / วิดีโอ", link(d.videoUrl)) : ""}
                 ${row("Amazon Bedrock", yesNo(d.bedrockUsed))}
                 ${row("AgentCore", yesNo(d.agentcoreUsed))}
               </table>
