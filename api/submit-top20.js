@@ -16,7 +16,6 @@ function setCorsHeaders(res) {
 
 // <links-validation>
 const REPO_HOSTS = ["github.com", "gitlab.com", "bitbucket.org", "codeberg.org"];
-const GITHUB_RESERVED = ["about", "features", "pricing", "login", "logout", "join", "signup", "settings", "topics", "marketplace", "orgs", "sponsors", "explore", "notifications", "pulls", "issues", "search", "new", "organizations", "enterprise", "collections", "trending", "events", "apps", "readme", "security", "site", "contact", "customer-stories"];
 const MAX_URL_LENGTH = 300;
 
 function parseHttpUrl(raw) {
@@ -46,28 +45,30 @@ function validateWebsiteUrl(raw) {
   return { ok: true, value: u.href };
 }
 
-// Link repository: harus https dan menunjuk ke repo di GitHub/GitLab/Bitbucket/Codeberg (owner/repo).
+// Link repository: hanya AWS CodeCommit.
+// Diterima: URL clone HTTPS  https://git-codecommit.<region>.amazonaws.com/v1/repos/<nama>
+//           URL console      https://<region>.console.aws.amazon.com/codesuite/codecommit/repositories/<nama>/...
 function validateRepoUrl(raw) {
   const u = parseHttpUrl(raw);
   if (!u || u.protocol !== "https:") return { ok: false, reason: "invalid" };
-  const host = u.hostname.toLowerCase().replace(/^www\./, "");
-  if (!REPO_HOSTS.includes(host)) return { ok: false, reason: "not_repo" };
-  let segs = u.pathname.split("/").filter(Boolean);
-  if (host === "gitlab.com") {
-    const i = segs.indexOf("-");
-    if (i !== -1) segs = segs.slice(0, i);
-  } else {
-    segs = segs.slice(0, 2);
+  const host = u.hostname.toLowerCase();
+  const segs = u.pathname.split("/").filter(Boolean);
+  const nameRe = /^[A-Za-z0-9_.-]{1,100}$/;
+  let m = host.match(/^git-codecommit(?:-fips)?\.([a-z]{2}(?:-[a-z]+)+-\d)\.amazonaws\.com(?:\.cn)?$/);
+  if (m) {
+    if (segs[0] !== "v1" || segs[1] !== "repos" || !segs[2]) return { ok: false, reason: "repo_incomplete" };
+    const name = segs[2].replace(/\.git$/i, "");
+    if (!nameRe.test(name)) return { ok: false, reason: "repo_incomplete" };
+    return { ok: true, value: "https://" + host + "/v1/repos/" + name };
   }
-  if (segs.length < 2) return { ok: false, reason: "repo_incomplete" };
-  segs = segs.map((s, i) => (i === segs.length - 1 ? s.replace(/\.git$/i, "") : s));
-  const nameRe = /^[A-Za-z0-9_.-]+$/;
-  if (!segs.every((s) => s && s !== "." && s !== ".." && nameRe.test(s))) return { ok: false, reason: "repo_incomplete" };
-  if (host === "github.com" && GITHUB_RESERVED.includes(segs[0].toLowerCase())) return { ok: false, reason: "repo_incomplete" };
-  return { ok: true, value: "https://" + host + "/" + segs.join("/") };
-}
-
-// Link video: URL http(s) dengan domain publik. Platform apa pun diterima (YouTube, Drive, Loom, dll).
+  m = host.match(/^(?:[a-z]{2}(?:-[a-z]+)+-\d)\.console\.aws\.amazon\.com$/);
+  if (m) {
+    if (segs[0] !== "codesuite" || segs[1] !== "codecommit" || segs[2] !== "repositories" || !segs[3]) return { ok: false, reason: "repo_incomplete" };
+    if (!nameRe.test(segs[3])) return { ok: false, reason: "repo_incomplete" };
+    return { ok: true, value: u.origin + "/codesuite/codecommit/repositories/" + segs[3] + u.search };
+  }
+  return { ok: false, reason: "not_repo" };
+}// Link video: URL http(s) dengan domain publik. Platform apa pun diterima (YouTube, Drive, Loom, dll).
 function validateVideoUrl(raw) {
   const u = parseHttpUrl(raw);
   if (!u) return { ok: false, reason: "invalid" };
@@ -105,16 +106,16 @@ function validatePayload(body) {
       : "Invalid website link. It must be a full link starting with https:// (e.g. https://myproject.vercel.app).");
   }
 
-  // Repository: WAJIB dan harus link repo yang benar
+  // Repository: WAJIB dan harus link AWS CodeCommit yang benar
   let repoUrl = null;
   if (!textOf(body.repo_url)) return fail("The repository link is required.");
   {
     const repo = validateRepoUrl(body.repo_url);
     if (!repo.ok) {
       return fail(repo.reason === "not_repo"
-        ? "Invalid repository link. Only GitHub, GitLab, Bitbucket and Codeberg links are accepted."
+        ? "Invalid repository link. Only AWS CodeCommit links are accepted. GitHub, GitLab and Bitbucket are not allowed."
         : repo.reason === "repo_incomplete"
-          ? "The repository link must point to a repository, e.g. https://github.com/username/repository."
+          ? "The repository link must point to a CodeCommit repository, e.g. https://git-codecommit.ap-southeast-1.amazonaws.com/v1/repos/repo-name."
           : "Invalid repository link. It must be a full link starting with https://.");
     }
     repoUrl = repo.value;
