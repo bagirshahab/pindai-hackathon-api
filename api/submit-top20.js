@@ -105,9 +105,10 @@ function validatePayload(body) {
       : "Invalid website link. It must be a full link starting with https:// (e.g. https://myproject.vercel.app).");
   }
 
-  // Repository: OPSIONAL, tapi kalau diisi harus link repo yang benar
+  // Repository: WAJIB dan harus link repo yang benar
   let repoUrl = null;
-  if (textOf(body.repo_url)) {
+  if (!textOf(body.repo_url)) return fail("The repository link is required.");
+  {
     const repo = validateRepoUrl(body.repo_url);
     if (!repo.ok) {
       return fail(repo.reason === "not_repo"
@@ -217,7 +218,7 @@ export default async function handler(req, res) {
                 ${row("Project / โปรเจกต์", `<strong>${p}</strong>`)}
                 ${row("Members / สมาชิก", m)}
                 ${row("Website / เว็บไซต์", link(d.websiteUrl))}
-                ${d.repoUrl ? row("Repository", link(d.repoUrl)) : ""}
+                ${row("Repository", link(d.repoUrl))}
                 ${d.videoUrl ? row("Video / วิดีโอ", link(d.videoUrl)) : ""}
                 ${row("Amazon Bedrock", yesNo(d.bedrockUsed))}
                 ${row("AgentCore", yesNo(d.agentcoreUsed))}
