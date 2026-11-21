@@ -116,6 +116,14 @@ function validatePayload(body) {
   }
 
 
+  // Credentials: OPSIONAL (akun uji untuk juri). Teks bebas, maksimal 2000 karakter.
+  let credentials = null;
+  if (body.credentials != null && body.credentials !== "") {
+    if (typeof body.credentials !== "string") return fail("Invalid credentials.");
+    const cred = body.credentials.trim();
+    if (cred.length > 2000) return fail("Credentials: maximum 2000 characters.");
+    if (cred) credentials = cred;
+  }
   // Bedrock & AgentCore: WAJIB dijawab (true/false)
   if (typeof body.bedrock_used !== "boolean") return fail("Please answer whether Amazon Bedrock was used.");
   if (typeof body.agentcore_used !== "boolean") return fail("Please answer whether AgentCore was used.");
@@ -125,7 +133,7 @@ function validatePayload(body) {
     data: {
       teamName, projectTitle, email, members,
       teamMembers: members.join(", "),
-      websiteUrl: website.value, repoUrl,
+      websiteUrl: website.value, repoUrl, credentials,
       bedrockUsed: body.bedrock_used, agentcoreUsed: body.agentcore_used,
     },
   };
@@ -171,12 +179,22 @@ export default async function handler(req, res) {
 
     // Resubmission diperbolehkan: setiap pengiriman disimpan sebagai baris baru (riwayat lengkap),
     // dan view submissions_top20_current menampilkan yang TERAKHIR per email (email sudah diverifikasi OTP).
-    await sql`
-      INSERT INTO submissions_top20
-        (team_name, email, project_title, team_members, website_url, repo_url, bedrock_used, agentcore_used, created_at)
-      VALUES
-        (${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
-    `;
+    // Credentials opsional: kolom hanya dipakai kalau diisi, jadi pengiriman biasa tidak bergantung pada kolom itu.
+    if (d.credentials) {
+      await sql`
+        INSERT INTO submissions_top20
+          (team_name, email, project_title, team_members, website_url, repo_url, credentials, bedrock_used, agentcore_used, created_at)
+        VALUES
+          (${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.credentials}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
+      `;
+    } else {
+      await sql`
+        INSERT INTO submissions_top20
+          (team_name, email, project_title, team_members, website_url, repo_url, bedrock_used, agentcore_used, created_at)
+        VALUES
+          (${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
+      `;
+      }
 
     // Email konfirmasi (gagal kirim tidak membatalkan submission)
     try {
