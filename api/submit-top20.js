@@ -4,6 +4,9 @@ import { Resend } from "resend";
 const sql = neon(process.env.DATABASE_URL);
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// Deadline penutupan Top 20: 21 November 2026, 22:00 waktu Thailand (UTC+7).
+// Setelah waktu ini, server menolak submission baru (tidak bisa dilewati dari frontend).
+const SUBMISSION_DEADLINE = new Date("2026-11-21T22:00:00+07:00");
 // Email harus sudah diverifikasi OTP dalam rentang waktu ini (dihitung dari OTP dikirim).
 const OTP_VALID_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 jam
 
@@ -149,6 +152,9 @@ export default async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
+  if (Date.now() >= SUBMISSION_DEADLINE.getTime()) {
+    return res.status(403).json({ error: "Submissions are now closed. The deadline (21 November 2026, 22:00 UTC+7) has passed." });
+  }
 
   try {
     let body = req.body;
