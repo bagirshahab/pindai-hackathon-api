@@ -116,13 +116,13 @@ function validatePayload(body) {
   }
 
 
-  // Credentials: OPSIONAL (akun uji untuk juri). Teks bebas, maksimal 2000 karakter.
-  let credentials = null;
-  if (body.credentials != null && body.credentials !== "") {
-    if (typeof body.credentials !== "string") return fail("Invalid credentials.");
-    const cred = body.credentials.trim();
-    if (cred.length > 2000) return fail("Credentials: maximum 2000 characters.");
-    if (cred) credentials = cred;
+  // Notes: OPSIONAL (mis. akun uji untuk juri). Teks bebas, maksimal 2000 karakter.
+  let notes = null;
+  if (body.notes != null && body.notes !== "") {
+    if (typeof body.notes !== "string") return fail("Invalid notes.");
+    const note = body.notes.trim();
+    if (note.length > 2000) return fail("Notes: maximum 2000 characters.");
+    if (note) notes = note;
   }
   // Bedrock & AgentCore: WAJIB dijawab (true/false)
   if (typeof body.bedrock_used !== "boolean") return fail("Please answer whether Amazon Bedrock was used.");
@@ -133,7 +133,7 @@ function validatePayload(body) {
     data: {
       teamName, projectTitle, email, members,
       teamMembers: members.join(", "),
-      websiteUrl: website.value, repoUrl, credentials,
+      websiteUrl: website.value, repoUrl, notes,
       bedrockUsed: body.bedrock_used, agentcoreUsed: body.agentcore_used,
     },
   };
@@ -179,13 +179,13 @@ export default async function handler(req, res) {
 
     // Resubmission diperbolehkan: setiap pengiriman disimpan sebagai baris baru (riwayat lengkap),
     // dan view submissions_top20_current menampilkan yang TERAKHIR per email (email sudah diverifikasi OTP).
-    // Credentials opsional: kolom hanya dipakai kalau diisi, jadi pengiriman biasa tidak bergantung pada kolom itu.
-    if (d.credentials) {
+    // Notes opsional: kolom hanya dipakai kalau diisi, jadi pengiriman biasa tidak bergantung pada kolom itu.
+    if (d.notes) {
       await sql`
         INSERT INTO submissions_top20
-          (team_name, email, project_title, team_members, website_url, repo_url, credentials, bedrock_used, agentcore_used, created_at)
+          (team_name, email, project_title, team_members, website_url, repo_url, notes, bedrock_used, agentcore_used, created_at)
         VALUES
-          (${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.credentials}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
+          (${d.teamName}, ${d.email}, ${d.projectTitle}, ${d.teamMembers}, ${d.websiteUrl}, ${d.repoUrl}, ${d.notes}, ${d.bedrockUsed}, ${d.agentcoreUsed}, NOW())
       `;
     } else {
       await sql`
